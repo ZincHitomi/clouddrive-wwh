@@ -23,11 +23,11 @@ bash -c "$(wget https://raw.githubusercontent.com/northsea4/clouddrive-wwh/main/
 
 curl:
 ```bash
-bash -c "$(curl -fsSL https://ghproxy.com/https://raw.githubusercontent.com/northsea4/clouddrive-wwh/main/docker/install.sh)"
+bash -c "$(curl -fsSL https://mirror.ghproxy.com/https://raw.githubusercontent.com/northsea4/clouddrive-wwh/main/docker/install.sh)"
 ```
 wget:
 ```bash
-bash -c "$(wget https://ghproxy.com/https://raw.githubusercontent.com/northsea4/clouddrive-wwh/main/docker/install.sh -O -)"
+bash -c "$(wget https://mirror.ghproxy.com/https://raw.githubusercontent.com/northsea4/clouddrive-wwh/main/docker/install.sh -O -)"
 ```
 
 
