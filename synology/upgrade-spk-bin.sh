@@ -44,7 +44,7 @@ fi
 # 架构
 arch=$(uname -m)
 # 如果是arm64，设置为aarch64
-if [ "$arch" == "aarch64" ]; then
+if [ "$arch" == "arm64" ]; then
   arch="aarch64"
 fi
 
