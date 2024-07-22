@@ -2,7 +2,9 @@
 
 ## 概述
 
-了解到其实`docker events`更容器实现这个功能，具体请看 [利用docker events重启其他容器](https://github.com/northsea4/clouddrive-wwh/blob/main/docker/on-start-do-sth.md)。
+> 已不再推荐改方案！
+
+了解到其实`docker events`更容易实现这个功能，具体请看 [利用docker events重启其他容器](https://github.com/northsea4/clouddrive-wwh/blob/main/docker/on-start-do-sth.md)。
 
 有兴趣可以继续往下阅读。
 
