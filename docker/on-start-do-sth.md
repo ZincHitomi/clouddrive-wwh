@@ -15,7 +15,7 @@
 
 使用示例:
 ```bash
-bash /path/to/on-start-do-sth.sh --c=clouddrive2 -cs auto_symlink -d 10
+bash /path/to/on-start-do-sth.sh -c clouddrive2 -cs auto_symlink -d 10
 ```
 
 脚本内容:
