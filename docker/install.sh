@@ -1,15 +1,32 @@
 #!/bin/bash
 
-# 如果是v2版本，则不能低于2.5.0版本
+DOCKER_COMPOSE_CMD="docker-compose"
+
 check_docker_compose() {
   # 检查是否有docker-compose命令
-  if ! command -v docker-compose &> /dev/null
+  if command -v docker-compose &> /dev/null
   then
-    echo "❌ 未找到docker-compose命令，请先安装docker-compose。"
-    exit 1
+    echo "✅ 找到docker-compose命令"
+    CMD_DOCKER_COMPOSE="docker-compose"
+    return 0
   fi
 
-  local dockerComposeVersion=$(docker-compose version --short)
+  # 检查是否有docker compose命令
+  if docker compose version &> /dev/null
+  then
+    echo "✅ 找到docker compose命令，临时添加别名 docker-compose"
+    CMD_DOCKER_COMPOSE="docker compose"
+    return 0
+  fi
+
+  # 如果两种命令都没有找到
+  echo "❌ 未找到docker-compose或docker compose命令，请先安装Docker Compose。"
+  exit 1
+}
+
+# 如果是v2版本，则不能低于2.5.0版本
+check_docker_compose_version() {
+  local dockerComposeVersion=$($CMD_DOCKER_COMPOSE version --short)
   if [[ -z "$dockerComposeVersion" ]]; then
     echo "❌ 错误：获取docker-compose版本失败。"
     exit 1
@@ -22,7 +39,7 @@ check_docker_compose() {
   # 如果是v1版本，则不需要判断
   if [[ $dockerComposeVersionMajor -eq 1 ]]; then
     echo "✅ docker-compose版本：$dockerComposeVersion"
-    return
+    return 0
   fi
 
   # 如果是v2版本，则不能低于2.5.0版本
@@ -57,6 +74,7 @@ check_docker
 
 # 检查docker-compose
 check_docker_compose
+check_docker_compose_version
 
 echo ""
 
@@ -234,12 +252,7 @@ echo "✅ 已创建配置目录：$(pwd)/config"
 echo ""
 
 
-# TODO 暂不考虑
 # 环境变量：应用数据目录
-# DEFAULT_CLOUDDRIVE_HOME=/Config
-# read -p "🔘 请输入容器内的应用数据目录（回车使用默认目录: ${CLOUDDRIVE_HOME}）：" CLOUDDRIVE_HOME
-# CLOUDDRIVE_HOME=${CLOUDDRIVE_HOME:-$DEFAULT_CLOUDDRIVE_HOME}
-# echo ""
 CLOUDDRIVE_HOME=/Config
 
 
@@ -457,6 +470,9 @@ if [[ "$OS" != "Darwin" ]]; then
   echo "✅ 已设置共享挂载"
   echo ""
 
+  echo "========================== 重 要 提 示 =========================="
+  echo "========================== 重 要 提 示 =========================="
+  echo "========================== 重 要 提 示 =========================="
   echo "🔘 请注意！你需要将以下命令添加到系统启动项，以确保重启系统后还能正常挂载！"
 
   touch "add-to-startup.sh"
@@ -475,13 +491,12 @@ if [[ "$OS" != "Darwin" ]]; then
 fi
 
 
-# 创建docker-compose.yml文件
-echo "⏳ 创建docker-compose.yml文件..."
 touch docker-compose.yml
-echo "✅ 已创建docker-compose.yml文件"
-# 写入docker-compose.yml文件
 echo "⏳ 写入docker-compose.yml文件..."
+
+# TODO WARN[0000] docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
 echo "version: '3'" >> docker-compose.yml
+
 echo "services:" >> docker-compose.yml
 echo "  $SERVICE_NAME:" >> docker-compose.yml
 echo "    image: $IMAGE_NAME" >> docker-compose.yml
@@ -491,6 +506,7 @@ echo "    container_name: $CONTAINER_NAME" >> docker-compose.yml
 echo "    environment:" >> docker-compose.yml
 echo "      - TZ=${TIMEZONE}" >> docker-compose.yml
 echo "      - CLOUDDRIVE_HOME=${CLOUDDRIVE_HOME}" >> docker-compose.yml
+echo "      - MAX_QPS_115=4" >> docker-compose.yml
 
 # devices
 echo "    devices:" >> docker-compose.yml
@@ -524,14 +540,14 @@ echo ""
 # 拉取镜像
 echo ""
 echo "⏳ 拉取镜像 ${IMAGE_NAME}..."
-docker-compose pull
+$CMD_DOCKER_COMPOSE pull
 if [ $? -eq 0 ]; then
   echo "✅ 拉取镜像完成"
 else
   echo "❌ 拉取镜像失败，请检查错误日志。如果是网络问题，在解决后你可以使用以下命令重新拉取和运行: "
   echo "cd ${DIR_FULL_PATH}"
-  echo "docker-compose pull"
-  echo "docker-compose up -d"
+  echo "$CMD_DOCKER_COMPOSE pull"
+  echo "$CMD_DOCKER_COMPOSE up -d"
 
   on_error "${DIR_FULL_PATH}"
 fi
@@ -546,8 +562,8 @@ update_tips() {
   echo "#!/bin/bash" >> update.sh
   echo "" >> update.sh
   echo "cd ${DIR_FULL_PATH}" >> update.sh
-  echo "docker-compose pull" >> update.sh
-  echo "docker-compose up -d" >> update.sh
+  echo "$CMD_DOCKER_COMPOSE pull" >> update.sh
+  echo "$CMD_DOCKER_COMPOSE up -d" >> update.sh
 
   echo "✅ 更新脚本已写入到 update.sh 文件。"
   echo "🔘 你可以通过以下命令更新容器："
@@ -561,7 +577,7 @@ update_tips() {
 echo ""
 read -p "❓ 是否运行容器？[y/n] " RUN_CONTAINER
 if [[ "$RUN_CONTAINER" =~ ^[Yy](es)?$ ]]; then
-  docker-compose up -d
+  $CMD_DOCKER_COMPOSE up -d
   if [ $? -eq 0 ]; then
     echo "✅ 容器已经成功运行！"
     echo ""
@@ -576,10 +592,11 @@ if [[ "$RUN_CONTAINER" =~ ^[Yy](es)?$ ]]; then
   fi
 else
   # 创建容器
-  docker-compose create
+  # TODO WARNING: The create command is deprecated. Use the up command with the --no-start flag instead.
+  $CMD_DOCKER_COMPOSE create
 
   echo "🔘 你可以之后通过以下命令启动容器:"
-  echo "cd ${DIR_FULL_PATH} && docker-compose up -d"
+  echo "cd ${DIR_FULL_PATH} && $CMD_DOCKER_COMPOSE up -d"
 fi
 
 
