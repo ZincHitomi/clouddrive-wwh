@@ -370,12 +370,15 @@ echo ""
 echo "请选择使用的镜像："
 echo "  1. cloudnas/clouddrive2 - 稳定版"
 echo "  2. cloudnas/clouddrive2-unstable - 测试版，可能存在BUG，但是有最新的功能"
+echo "  3. cloudnas/clouddrive2-unstable-test - 开发版，用于开发测试"
 read -p "❓ 请输入数字（回车使用默认选项1，即稳定版）：" IMAGE_INDEX
 IMAGE_INDEX=${IMAGE_INDEX:-1}
 if [[ $IMAGE_INDEX -eq 1 ]]; then
   IMAGE_NAME=cloudnas/clouddrive2
 elif [[ $IMAGE_INDEX -eq 2 ]]; then
   IMAGE_NAME=cloudnas/clouddrive2-unstable
+elif [[ $IMAGE_INDEX -eq 3 ]]; then
+  IMAGE_NAME=cloudnas/clouddrive2-unstable-test
 else
   echo "❌ 错误：输入的数字不正确。"
   exit 1
