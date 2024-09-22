@@ -266,7 +266,7 @@ select_container() {
     return
   fi
 
-  echo "❓ 请选择要诊断的容器:"
+  echo "❓ 请选择要诊断的容器:" >&2
   IFS=$'\n'
   select container in $containers; do
     if [[ -n "$container" ]]; then
