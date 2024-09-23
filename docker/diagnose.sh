@@ -1,5 +1,10 @@
 #!/bin/bash
 
+SCRIPT_NAME=$0
+if [[ "$SCRIPT_NAME" != *.sh ]]; then
+  SCRIPT_NAME="diagnose.sh"
+fi
+
 # 设置颜色变量
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -254,6 +259,7 @@ select_container() {
   local containers=$(docker ps -a --format "{{.Names}} {{.Image}}" | grep clouddrive2)
   if [[ -z "$containers" ]]; then
     print_error "未找到名称或所用镜像名称包含 clouddrive2 的容器。"
+    echo "💡 可以通过参数 -c 指定容器名称，如 $SCRIPT_NAME -c clouddrive2"
     exit 1
   fi
 
@@ -361,18 +367,18 @@ show_usage() {
   echo "  3. 检查容器时区"
   echo "  4. 检查映射和挂载点设置"
   echo
-  echo "用法: $0 [选项]"
+  echo "用法: $SCRIPT_NAME [选项]"
   echo "选项:"
   echo "  -c, --container NAME        指定 Docker 容器名称，可选"
   echo "  -h, --help                  显示此帮助信息"
   echo
-  echo "示例 - 无参数使用: $0"
-  echo "示例 - 指定容器: $0 -c clouddrive2"
+  echo "示例 - 无参数使用: $SCRIPT_NAME"
+  echo "示例 - 指定容器: $SCRIPT_NAME -c clouddrive2"
   echo
   echo "Github：https://github.com/northsea4/clouddrive-wwh"
   echo
   echo "作者: 生瓜太保"
-  echo "更新: 2024-09-22"
+  echo "更新: 2024-09-23"
 }
 
 # 解析命令行参数
