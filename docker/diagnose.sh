@@ -417,7 +417,7 @@ check_container() {
   fi
 
   local image=$(docker inspect -f '{{.Config.Image}}' "$container")
-  if ! [[ "$image" =~ ^cloudnas/clouddrive2.* ]]; then
+  if ! [[ "$image" =~ "cloudnas/clouddrive2" ]]; then
     print_error "容器 $container 镜像不是 cloudnas/clouddrive2*"
     exit 1
   fi
