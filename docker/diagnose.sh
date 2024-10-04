@@ -235,9 +235,16 @@ check_shared_volumes() {
         else
           VOLUMES_OK=false
           print_error "$mount_point 不是共享挂载"
-          print_advice "执行命令以下命令:"
+
+          print_advice "执行以下命令:"
           echo "sudo mount --make-shared $mount_point"
+
+          if command -v systemctl &> /dev/null; then
+            echo "systemctl daemon-reload"
+          fi
+
           echo "docker restart $container"
+
           print_advice "将以下命令添加到系统启动脚本中:"
           echo "sudo mount --make-shared $mount_point"
         fi
@@ -250,6 +257,16 @@ check_shared_volumes() {
     print_success "容器设置了至少一个挂载传播为 shared 或 rshared 的映射"
   else
     print_error "容器缺少设置挂载传播为 shared 或 rshared 的映射"
+    print_advice "添加至少一个挂载传播为 shared 或 rshared 的映射。"
+
+    echo "docker-cli 方式示例:"
+    echo "docker run ... -v /volume1/CloudNAS:/CloudNAS:shared ..."
+    echo
+
+    echo "docker-compose 方式示例:"
+    echo "    volumes:"
+    echo "      - /volume1/CloudNAS:/CloudNAS:shared"
+
     VOLUMES_OK=false
   fi
 }
@@ -338,21 +355,25 @@ summary_diagnosis() {
   else
     print_success "  - 容器运行状态正常"
   fi
+  
   if [[ $PID_OK == false ]]; then
     print_error "  - 容器 PID 模式异常"
   else
     print_success "  - 容器 PID 模式正常"
   fi
-  if [[ $VOLUMES_OK == false ]]; then
-    print_error "  - 容器映射和挂载点设置异常"
-  else
-    print_success "  - 容器映射和挂载点设置正常"
-  fi
+
   if [[ $TIMEZONE_OK == false ]]; then
     print_error "  - 容器时区设置异常"
   else
     print_success "  - 容器时区设置正常"
   fi
+
+  if [[ $VOLUMES_OK == false ]]; then
+    print_error "  - 容器映射和挂载点设置异常"
+  else
+    print_success "  - 容器映射和挂载点设置正常"
+  fi
+
   echo
   print_log "具体请查阅上方的诊断日志"
 }
@@ -367,18 +388,18 @@ show_usage() {
   echo "  3. 检查容器时区"
   echo "  4. 检查映射和挂载点设置"
   echo
-  echo "用法: $SCRIPT_NAME [选项]"
+  echo "用法: bash $SCRIPT_NAME [选项]"
   echo "选项:"
-  echo "  -c, --container NAME        指定 Docker 容器名称，可选"
+  echo "  -c, --container NAME        指定 CloudDrive2 Docker 容器名称，可选"
   echo "  -h, --help                  显示此帮助信息"
   echo
-  echo "示例 - 无参数使用: $SCRIPT_NAME"
-  echo "示例 - 指定容器: $SCRIPT_NAME -c clouddrive2"
+  echo "示例 - 无参数使用: bash $SCRIPT_NAME"
+  echo "示例 - 指定容器: bash $SCRIPT_NAME -c clouddrive2"
   echo
   echo "Github：https://github.com/northsea4/clouddrive-wwh"
   echo
   echo "作者: 生瓜太保"
-  echo "更新: 2024-09-23"
+  echo "更新: 2024-10-04"
 }
 
 # 解析命令行参数
