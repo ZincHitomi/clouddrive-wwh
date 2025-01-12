@@ -17,6 +17,37 @@ GH_PROXY=""
 TEMP_FILE=""
 UPDATED=false
 
+# 定义颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 日志记录函数
+log() {
+  local level="$1"
+  shift
+  local message="$@"
+  local timestamp
+  timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+
+  case "$level" in
+    INFO)
+      echo -e "[$timestamp] [${GREEN}$level${NC}] $message"
+      ;;
+    WARN)
+      echo -e "[$timestamp] [${YELLOW}$level${NC}] $message"
+      ;;
+    ERROR)
+      echo -e "[$timestamp] [${RED}$level${NC}] $message"
+      ;;
+    *)
+      echo -e "[$timestamp] [$level] $message"
+      ;;
+  esac
+}
+
 # 显示使用说明
 show_usage() {
   echo "功能: 安装或更新 Emby 中的 StrmAssistant(又名 神医助手) 插件"
@@ -83,7 +114,7 @@ parse_arguments() {
       exit 0
       ;;
     *)
-      echo "错误: 未知选项 $1"
+      log "ERROR" "错误: 未知选项 $1"
       show_usage
       exit 1
       ;;
@@ -101,7 +132,7 @@ check_dependencies() {
   fi
   for cmd in "${cmds[@]}"; do
     if ! command -v "$cmd" &>/dev/null; then
-      echo "错误: 未找到命令 '$cmd'。请确保已安装。"
+      log "ERROR" "错误: 未找到命令 '$cmd'。请确保已安装。"
       exit 1
     fi
   done
@@ -133,7 +164,7 @@ get_emby_container() {
   containers=$(docker ps -a --format '{{.Names}} {{.Image}}' | grep -i emby)
 
   if [[ -z "$containers" ]]; then
-    echo "错误: 未找到名称或所用镜像包含「emby」容器。"
+  log "ERROR" "错误: 未找到名称或所用镜像包含「emby」容器。"
     exit 1
   fi
 
@@ -151,19 +182,19 @@ get_emby_container() {
     unset IFS  # 恢复默认IFS
   fi
 
-  echo "选择的 Emby 容器: $CONTAINER"
+    log "INFO" "选择的 Emby 容器: $CONTAINER"
 }
 
 # 获取容器插件目录的在宿主机上的绝对路径
 get_container_plugin_dir() {
   LOCATION=$(docker inspect "$CONTAINER" | jq -r '.[0].Mounts[] | select(.Destination == "/config") | .Source')
   if [[ -z "$LOCATION" ]]; then
-    echo "错误: 无法找到容器的 /config 挂载点。"
+  log "ERROR" "错误: 无法找到容器的 /config 挂载点。"
     exit 1
   fi
   LOCATION="$LOCATION/plugins"
 
-  echo "插件目录: $LOCATION"
+  log "INFO" "插件目录: $LOCATION"
 }
 
 # 下载插件
@@ -187,17 +218,17 @@ download_plugin() {
   fi
 
   if [[ -z "$download_url" ]]; then
-    echo "错误: 无法获取下载 URL。"
+    log "ERROR" "错误: 无法获取下载 URL。"
     exit 1
   fi
 
-  echo "下载 URL: $download_url"
+  log "INFO" "下载 URL: $download_url"
 
   temp_file=$(mktemp)
   if curl -L "$download_url" -o "$temp_file"; then
-    echo "插件下载成功。"
+    log "INFO" "插件下载成功。"
   else
-    echo "错误: 插件下载失败。"
+    log "ERROR" "错误: 插件下载失败。"
     rm -f "$temp_file"
     exit 1
   fi
@@ -217,19 +248,19 @@ set_permission() {
   if [[ -f "$sample_file" ]]; then
     permission=$(get_permission "$sample_file")
     if [[ -z "$permission" ]]; then
-      echo "警告: 无法获取示例文件 "${sample_file}" 的权限，将使用默认权限: $permission"
+      log "WARN" "警告: 无法获取示例文件 "${sample_file}" 的权限，将使用默认权限: $permission"
     else
-      echo "获取到示例文件 "${sample_file}" 的权限为 $permission"
+      log "INFO" "获取到示例文件 "${sample_file}" 的权限为 $permission"
     fi
 
     target_user_group=$(get_user_group "$sample_file")
     if [[ -z "$target_user_group" ]]; then
-      echo "警告: 无法获取示例文件 "${sample_file}" 的所有者和所属组，将使用当前用户和组"
+      log "WARN" "警告: 无法获取示例文件 "${sample_file}" 的所有者和所属组，将使用当前用户和组"
     else
-      echo "获取到示例文件 "${sample_file}" 的所有者和所属组为 $target_user_group"
+      log "INFO" "获取到示例文件 "${sample_file}" 的所有者和所属组为 $target_user_group"
     fi
   else
-    echo "警告: 示例文件 "${sample_file}" 不存在，将使用默认权限: $permission"
+    log "WARN" "警告: 示例文件 "${sample_file}" 不存在，将使用默认权限: $permission"
   fi
 
   # 临时关闭错误处理
@@ -237,29 +268,29 @@ set_permission() {
 
   chmod "$permission" "$target_file"
   if [[ $? -ne 0 ]]; then
-    echo "警告: 无法设置 ${target_file} 权限为 $permission，尝试使用 sudo 设置"
+    log "WARN" "警告: 无法设置 ${target_file} 权限为 $permission，尝试使用 sudo 设置"
     sudo chmod "$permission" "$target_file"
     if [[ $? -ne 0 ]]; then
-      echo "错误: 无法设置 ${target_file} 权限为 $permission"
+      log "ERROR" "错误: 无法设置 ${target_file} 权限为 $permission"
     else
-      echo "已设置 ${target_file} 权限为 $permission"
+      log "INFO" "已设置 ${target_file} 权限为 $permission"
     fi
   else
-    echo "已设置 ${target_file} 权限为 $permission"
+    log "INFO" "已设置 ${target_file} 权限为 $permission"
   fi
 
   if [[ -n "$target_user_group" && "$current_user_group" != "$target_user_group" ]]; then
     chown "$target_user_group" "$target_file"
     if [[ $? -ne 0 ]]; then
-      echo "警告: 无法设置 ${target_file} 的所有者和所属组为 $permission，尝试使用 sudo 设置"
+      log "WARN" "警告: 无法设置 ${target_file} 的所有者和所属组为 $permission，尝试使用 sudo 设置"
       sudo chown "$target_user_group" "$target_file"
       if [[ $? -ne 0 ]]; then
-        echo "错误: 无法设置 ${target_file} 的所有者和所属组为 $target_user_group"
+        log "ERROR" "错误: 无法设置 ${target_file} 的所有者和所属组为 $target_user_group"
       else
-        echo "已设置 ${target_file} 的所有者和所属组为 $target_user_group"
+        log "INFO" "已设置 ${target_file} 的所有者和所属组为 $target_user_group"
       fi
-    else  
-      echo "已设置 ${target_file} 的所有者和所属组为 $target_user_group"
+    else
+      log "INFO" "已设置 ${target_file} 的所有者和所属组为 $target_user_group"
     fi
   fi
 
@@ -277,7 +308,7 @@ update_plugin() {
 
   if [[ -f "$target_file" ]]; then
     if cmp -s "$temp_file" "$target_file"; then
-      echo "插件文件未发生变化，无需更新。"
+      log "INFO" "插件文件未发生变化，无需更新。"
       rm -f "$temp_file"
       return
     fi
@@ -287,7 +318,7 @@ update_plugin() {
 
   set_permission "$target_file" "$LOCATION/$SAMPLE_PLUGIN"
 
-  echo "插件更新成功。"
+  log "INFO" "插件更新成功。"
 
   UPDATED=true
 }
@@ -300,15 +331,15 @@ restart_container() {
 
   if [[ -n "$CONTAINER" ]]; then
     if [[ "$RESTART" == true ]]; then
-      echo "重启 Emby 容器..."
+      log "INFO" "重启 Emby 容器..."
       docker restart "$CONTAINER"
-      echo "Emby 容器已重启。"
+      log "INFO" "Emby 容器已重启。"
     else
       read -p "是否要重启 Emby 容器？(y/N) " answer
       if [[ "$answer" =~ ^[Yy]$ ]]; then
-        echo "重启 Emby 容器..."
+        log "INFO" "重启 Emby 容器..."
         docker restart "$CONTAINER"
-        echo "Emby 容器已重启。"
+        log "INFO" "Emby 容器已重启。"
       fi
     fi
   fi
@@ -354,7 +385,7 @@ main() {
 
   restart_container
 
-  echo "插件更新完成。"
+  log "INFO" "插件更新完成。"
 }
 
 # 执行主函数
