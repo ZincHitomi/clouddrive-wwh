@@ -11,7 +11,7 @@ VERSION="latest"
 CONTAINER=""
 LOCATION=""
 RESTART=false
-IS_DOCKER=true
+IS_DOCKER=false
 GH_PROXY=""
 
 TEMP_FILE=""
@@ -125,7 +125,7 @@ parse_arguments() {
 # 检查必要的命令是否存在
 check_dependencies() {
   # 如果是docker版，才检查docker命令
-  if [[ -n "$IS_DOCKER" ]]; then
+  if [[ $IS_DOCKER == true ]]; then
     local cmds=("curl" "jq" "docker")
   else
     local cmds=("curl" "jq")
@@ -330,7 +330,7 @@ restart_container() {
   fi
 
   if [[ -n "$CONTAINER" ]]; then
-    if [[ "$RESTART" == true ]]; then
+    if [[ $RESTART == true ]]; then
       log "INFO" "重启 Emby 容器..."
       docker restart "$CONTAINER"
       log "INFO" "Emby 容器已重启。"
@@ -365,17 +365,17 @@ main() {
   check_dependencies
 
   # 如果指定是docker版，但没有指定容器名称，则自动获取
-  if [[ -n "$IS_DOCKER" && -z "$CONTAINER" ]]; then
+  if [[ $IS_DOCKER == true && -z "$CONTAINER" ]]; then
     get_emby_container
   fi
 
   # 如果不是Docker版，且没有指定插件目录路径，则询问输入
-  if [[ -z "$IS_DOCKER" && -z "$LOCATION" ]]; then
+  if [[ $IS_DOCKER == true && -z "$LOCATION" ]]; then
     prompt_plugin_dir
   fi
 
   # 如果指定是docker版，但没有指定插件目录路径，则自动获取
-  if [[ -n "$IS_DOCKER" && -z "$LOCATION" ]]; then
+  if [[ $IS_DOCKER == true && -z "$LOCATION" ]]; then
     get_container_plugin_dir
   fi
 
