@@ -140,19 +140,35 @@ check_dependencies() {
 
 # 获取文件权限
 get_permission() {
-  # macOS: stat -f "%Lp" "$1"
-  # linux (某些系统没有`stat`命令，如OpenWrt)
+  # 某些系统默认没有`stat`命令，如OpenWrt
   if ! command -v stat &>/dev/null; then
     return 1
   fi
+
+  # macOS
+  if [[ $(uname) == "Darwin" ]]; then
+    echo $(stat -f "%Lp" "$1")
+    return
+  fi
+
+  # linux
   echo $(stat -c "%a" "$1")
 }
 
 # 获取文件所有者和所属组
 get_user_group() {
+  # 某些系统默认没有`stat`命令，如OpenWrt
   if ! command -v stat &>/dev/null; then
     return 1
   fi
+
+  # macOS
+  if [[ $(uname) == "Darwin" ]]; then
+    echo $(stat -f "%Su:%Sg" "$1")
+    return
+  fi
+
+  # linux
   echo $(stat -c "%U:%G" "$1")
 }
 
