@@ -4,15 +4,21 @@
 set -e
 
 # 定义全局变量
-GITHUB_REPO="https://github.com/sjtuross/StrmAssistant"
+GITHUB_OWNER="sjtuross"
+GITHUB_REPO="StrmAssistant"
+GITHUB_REPO_URL="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}"
+GITHUB_API_URL="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
 PLUGIN_NAME="StrmAssistant.dll"
 SAMPLE_PLUGIN="Emby.Webhooks.dll"
 VERSION="latest"
+RUN_URL=""
 CONTAINER=""
 LOCATION=""
 RESTART=false
 IS_DOCKER=false
 GH_PROXY=""
+
+GITHUB_TOKEN=${GITHUB_TOKEN:-""}
 
 TEMP_FILE=""
 UPDATED=false
@@ -55,6 +61,8 @@ show_usage() {
   echo "用法: $0 [选项]"
   echo "选项:"
   echo "  -v, --version VERSION       指定插件版本号（默认: latest）"
+  echo "  -r, --run URL               指定Github Actions run链接"
+  echo "  -tk, --token TOKEN          使用run链接时，需提供GitHub Token，必须具备 workflow 权限"
   echo "  -c, --container NAME        指定 Docker 容器名称。如果目标Emby是Docker容器，但不确定容器名称，可以指定 --docker 选项，省略此选项"
   echo "  -d, --docker                指定 Emby 部署方式为 Docker，如果指定了 --container 选项，可省略此选项，如未指定 --container 选项，脚本将会尽量自动获取容器和插件路径"
   echo "  -l, --location PATH         指定插件目录路径，如果是Docker版，一般可以省略，因为可以自动检测"
@@ -70,10 +78,10 @@ show_usage() {
   echo "示例 - 指定ghproxy加速下载: $0 -d -gp"
   echo "示例 - 指定自定义ghproxy域名加速下载: $0 -d -gph https://gh.myhost.io"
   echo
-  echo "StrmAssistant Github: ${GITHUB_REPO}"
+  echo "StrmAssistant Github: ${GITHUB_REPO_URL}"
   echo
   echo "脚本作者: 生瓜太保"
-  echo "更新时间: 2025-01-10"
+  echo "更新时间: 2025-03-22"
 }
 
 # 解析命令行参数
@@ -82,6 +90,23 @@ parse_arguments() {
     case $1 in
     -v | --version)
       VERSION="$2"
+      shift 2
+      ;;
+    -r | --run)
+      RUN_URL="$2"
+      # https://github.com/sjtuross/StrmAssistant/actions/runs/14007790472
+      if [[ ! "$RUN_URL" =~ ^https://github\.com/.+/actions/runs/[0-9]+$ ]]; then
+        log "ERROR" "错误: 无效的 Github Actions run 链接。"
+        exit 1
+      fi
+      shift 2
+      ;;
+    -tk | --token)
+      GITHUB_TOKEN="$2"
+      if [[ -z "$GITHUB_TOKEN" ]]; then
+        log "ERROR" "错误: GitHub Token 不能为空。"
+        exit 1
+      fi
       shift 2
       ;;
     -c | --container)
@@ -136,6 +161,19 @@ check_dependencies() {
       exit 1
     fi
   done
+
+  # 如果指定了 RUN_URL，需要确保有可以解压的命令（unzip 或 7z）和 jq
+  if [[ -n "$RUN_URL" ]]; then
+    if ! command -v unzip &>/dev/null && ! command -v 7z &>/dev/null; then
+      log "ERROR" "错误: 未找到解压命令 'unzip' 或 '7z'。请确保已安装。"
+      exit 1
+    fi
+
+    if ! command -v jq &>/dev/null; then
+      log "ERROR" "错误: 未找到命令 'jq'。请确保已安装。"
+      exit 1
+    fi
+  fi
 }
 
 # 获取文件权限
@@ -251,6 +289,139 @@ download_plugin() {
 
   TEMP_FILE="$temp_file"
 }
+
+# 根据运行链接获取 Artifact 下载链接
+# 参数: 运行链接 (示例: https://github.com/sjtuross/StrmAssistant/actions/runs/123)
+# 返回: Artifact 下载链接 (示例: https://api.github.com/repos/sjtuross/StrmAssistant/actions/artifacts/123/zip)
+get_artifact_url_via_run() {
+  local run_url=$1
+  local artifact_url
+
+  if [[ -z "$run_url" ]]; then
+    log "ERROR" "错误: 未指定 Github Actions 运行链接。"
+    exit 1
+  fi
+
+  # 提取运行 ID
+  local run_id
+  run_id=$(echo "$run_url" | sed -E 's|.*/([0-9]+)/?.*|\1|')
+  if [[ -z "$run_id" ]]; then
+    log "ERROR" "错误: 无法提取运行 ID。"
+    exit 1
+  fi
+  # log "INFO" "提取到运行 ID: $run_id"
+
+  # 获取 Artifact 下载链接
+  artifact_url=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$GITHUB_API_URL/actions/runs/$run_id/artifacts" | jq -r '.artifacts[0].archive_download_url')
+  if [[ -z "$artifact_url" ]]; then
+    log "ERROR" "错误: 无法获取 Artifact 下载链接。"
+    exit 1
+  fi
+  
+  echo "$artifact_url"
+}
+
+# 解压zip文件。尝试 unzip 和 7z 命令
+unzip_file() {
+  local zip_file=$1
+  local target_dir=$2
+  
+  # 尝试使用 unzip 命令解压
+  if command -v unzip &>/dev/null; then
+    unzip -q "$zip_file" -d "$target_dir"
+    if [[ $? -ne 0 ]]; then
+      log "ERROR" "错误: unzip 解压失败。"
+      return 1
+    fi
+  fi
+
+  # 如果 unzip 失败，尝试使用 7z 命令解压
+  if command -v 7z &>/dev/null; then
+    7z x "$zip_file" -o"$target_dir" -y
+    if [[ $? -ne 0 ]]; then
+      log "ERROR" "错误: 7z 解压失败。"
+      return 1
+    fi
+  fi
+
+  # 如果 unzip 和 7z 都不可用，提示错误
+  if ! command -v unzip &>/dev/null && ! command -v 7z &>/dev/null; then
+    log "ERROR" "错误: unzip 和 7z 都不可用，无法解压 zip 文件。"
+    return 1
+  fi
+}
+
+# 下载插件（通过Artifact链接)
+download_artifact() {
+  local run_url=$1
+  local temp_file
+
+  if [[ -z "$run_url" ]]; then
+    log "ERROR" "错误: 未指定 Artifact 下载链接。"
+    exit 1
+  fi
+
+  # 如果没有提供 Github Token，提示错误
+  if [[ -z "$GITHUB_TOKEN" ]]; then
+    log "ERROR" "错误: 需要提供 GitHub Token。请设置环境变量 GITHUB_TOKEN。"
+    exit 1
+  fi
+
+  local artifact_url=$(get_artifact_url_via_run "$run_url")
+  if [[ -z "$artifact_url" ]]; then
+    log "ERROR" "错误: 无法获取 Artifact 下载链接。"
+    exit 1
+  fi
+
+  log "INFO" "Artifact 下载链接: $artifact_url"
+
+  temp_dir=$(mktemp -d)
+  temp_zip="$temp_dir/artifact.zip"
+
+  # curl -L \
+  #   -H "Accept: application/vnd.github+json" \
+  #   -H "Authorization: Bearer xxxx" \
+  #   -H "X-GitHub-Api-Version: 2022-11-28" \
+  #   https://api.github.com/repos/sjtuross/StrmAssistant/actions/artifacts/123/zip
+  #   https://github.com/sjtuross/StrmAssistant/actions/runs/123
+  
+  if curl -H "Authorization: Bearer $GITHUB_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28" -L "$artifact_url" -o "$temp_zip"; then
+    log "INFO" "Artifact 下载成功。"
+
+    ls -hl "$temp_zip"
+    
+    # 解压 zip 文件
+    if unzip_file "$temp_zip" "$temp_dir"; then
+      log "INFO" "Artifact 解压成功。"
+      
+      # 查找 StrmAssistant.dll 文件
+      dll_file=$(find "$temp_dir" -name "$PLUGIN_NAME" -type f)
+      
+      if [[ -n "$dll_file" ]]; then
+        log "INFO" "找到 $PLUGIN_NAME 文件。"
+        temp_file=$(mktemp)
+        cp "$dll_file" "$temp_file"
+        TEMP_FILE="$temp_file"
+      else
+        log "ERROR" "错误: 在解压后的文件中未找到 $PLUGIN_NAME。"
+        rm -rf "$temp_dir"
+        exit 1
+      fi
+    else
+      log "ERROR" "错误: Artifact 解压失败。"
+      rm -rf "$temp_dir"
+      exit 1
+    fi
+  else
+    log "ERROR" "错误: Artifact 下载失败。"
+    rm -rf "$temp_dir"
+    exit 1
+  fi
+  
+  # 清理临时目录
+  rm -rf "$temp_dir"
+}
+
 
 # 设置权限(参数: 目标文件 示例文件)
 set_permission() {
@@ -386,7 +557,7 @@ main() {
   fi
 
   # 如果不是Docker版，且没有指定插件目录路径，则询问输入
-  if [[ $IS_DOCKER == true && -z "$LOCATION" ]]; then
+  if [[ $IS_DOCKER == false && -z "$LOCATION" ]]; then
     prompt_plugin_dir
   fi
 
@@ -395,7 +566,12 @@ main() {
     get_container_plugin_dir
   fi
 
-  download_plugin
+  # 下载插件
+  if [[ -n "$RUN_URL" ]]; then
+    download_artifact "$RUN_URL"
+  else
+    download_plugin
+  fi
 
   update_plugin "$TEMP_FILE"
 
